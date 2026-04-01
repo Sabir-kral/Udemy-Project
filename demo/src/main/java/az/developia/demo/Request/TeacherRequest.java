@@ -5,6 +5,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
+import org.hibernate.validator.constraints.URL;
 
 @Data
 public class TeacherRequest {
@@ -38,6 +39,8 @@ public class TeacherRequest {
     @Size(min = 2,max = 50,message = "min 2 max 50 herfden ibaret olmalidir")
     @NotBlank(message = "Bos ola bilmez")
     private String description;
-
+    @URL
     private String profilePictureUrl;
+
+    private String categoryName;
 }

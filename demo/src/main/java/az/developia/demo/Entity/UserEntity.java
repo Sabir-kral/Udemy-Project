@@ -33,5 +33,14 @@ public class UserEntity {
     @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<EmailVerificationEntity> verificationTokens;
 
+    @OneToOne(mappedBy = "user",cascade = CascadeType.REMOVE)
+    private TeacherEntity teacher;
+
+    @OneToOne(mappedBy = "user",cascade = CascadeType.REMOVE)
+    private StudentEntity student;
+
+    @Column(name = "is_verified")
+    private Boolean isVerified;
+
 
 }

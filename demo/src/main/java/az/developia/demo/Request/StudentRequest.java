@@ -33,4 +33,6 @@ public class StudentRequest {
             message = "Minimum 8 simvol, en azi 1 boyuk, 1 kicik herf, 1 reqem və 1 xususi simvol olmalidır"
     )
     private String repeatPassword;
+
+    private Long teacherId;
 }

@@ -3,7 +3,6 @@ package az.developia.demo.Request;
 import lombok.Data;
 
 @Data
-public class UserRequest {
+public class ResendOtpRequest {
     private String email;
-    private String password;
 }
