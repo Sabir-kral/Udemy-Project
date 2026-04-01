@@ -5,6 +5,7 @@ import az.developia.demo.Exception.CustomException;
 import az.developia.demo.Mapper.StudentMapper;
 import az.developia.demo.Mapper.TeacherMapper;
 import az.developia.demo.Repo.*;
+import az.developia.demo.Request.PlaylistUpdateRequest;
 import az.developia.demo.Request.TeacherRequest;
 import az.developia.demo.Request.TeacherUpdateRequest;
 import az.developia.demo.Response.MessageResponse;
@@ -36,16 +37,11 @@ public class TeacherService {
     private final StudentRepo studentRepo;
     private final LogService logService;
     private final ReviewRepo reviewRepo;
+    private final PlaylistRepo playlistRepo;
 
     public MessageResponse register(TeacherRequest request) throws MessagingException {
         userService.isUserExists(request.getEmail());
 
-        UserEntity user = new UserEntity();
-        user.setEmail(request.getEmail());
-        user.setPassword(passwordEncoder.encode(request.getPassword()));
-        user.setBalance(100.0);
-        user.setUserType("Teacher");
-        userRepository.save(user);
 
         TeacherEntity teacher = new TeacherEntity();
         teacher.setName(request.getName());
@@ -59,6 +55,13 @@ public class TeacherService {
         teacher.setProfilePictureUrl(request.getProfilePictureUrl());
         teacher.setStudentCount(0);
 
+        UserEntity user = new UserEntity();
+        user.setEmail(request.getEmail());
+        user.setPassword(passwordEncoder.encode(request.getPassword()));
+        user.setBalance(100.0);
+        user.setUserType("Teacher");
+        user.setIsVerified(false);
+
         if (!request.getPassword().equals(request.getRepeatPassword())) {
             throw new CustomException("Passwords do not match", "BAD_REQUEST", 400);
         }
@@ -71,6 +74,7 @@ public class TeacherService {
                 });
 
         teacher.setCategory(category);
+        userRepository.save(user);
         teacher.setUser(user);
         teacherRepo.save(teacher);
 
@@ -111,14 +115,14 @@ public class TeacherService {
                 .toList();
     }
 
-    public MessageResponse update(String email, TeacherUpdateRequest request){
+    public MessageResponse update(String email, TeacherUpdateRequest request) {
         TeacherEntity teacher = teacherRepo.findByEmail(email)
                 .orElseThrow(() -> new RuntimeException("Not Found"));
         UserEntity users = userRepository.findByEmail(email)
                 .orElseThrow(() -> new RuntimeException("Not Found"));
 
-        users.setEmail(request.getEmail());
 
+        users.setEmail(request.getEmail());
         teacher.setName(request.getName());
         teacher.setSurname(request.getSurname());
         teacher.setPhone(request.getPhone());
@@ -127,7 +131,7 @@ public class TeacherService {
         teacher.setDescription(request.getDescription());
         teacher.setProfilePictureUrl(request.getProfilePictureUrl());
 
-        if(request.getCategoryName() != null){
+        if (request.getCategoryName() != null) {
             CategoryEntity category = categoryRepo.findByName(request.getCategoryName())
                     .orElseGet(() -> {
                         CategoryEntity newCategory = new CategoryEntity();
@@ -143,8 +147,9 @@ public class TeacherService {
         messageResponse.setMessage("Update edildi");
         return messageResponse;
     }
+
     @Transactional
-    public void delete(String email){
+    public void delete(String email) {
         TeacherEntity teacher = teacherRepo.findByEmail(email)
                 .orElseThrow(() -> new RuntimeException("Teacher not found"));
 
@@ -155,6 +160,7 @@ public class TeacherService {
 
         userRepository.delete(user);
     }
+
     private String generateCode() {
         String characters = "0123456789";
         StringBuilder codeBuilder = new StringBuilder();
@@ -164,4 +170,82 @@ public class TeacherService {
         }
         return codeBuilder.toString();
     }
+
+    @Transactional
+    public MessageResponse updatePlaylist(Long id, PlaylistUpdateRequest request) {
+
+        String email = SecurityContextHolder.getContext().getAuthentication().getName();
+
+        TeacherEntity teacher = teacherRepo.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("Teacher not found"));
+
+        PlaylistEntity playlist = playlistRepo.findById(id)
+                .orElseThrow(() -> new RuntimeException("Playlist not found"));
+
+        if (!playlist.getTeacher().getId().equals(teacher.getId())) {
+            throw new CustomException("Access denied", "FORBIDDEN", 403);
+        }
+
+
+        if (request.getCategoryId() != null) {
+            CategoryEntity category = categoryRepo.findById(request.getCategoryId())
+                    .orElseThrow(() -> new RuntimeException("Category not found"));
+            playlist.setCategory(category);
+        }
+        if (request.getTitle() != null) {
+            playlist.setTitle(request.getTitle());
+        }
+
+        if (request.getDescription() != null) {
+            playlist.setDescription(request.getDescription());
+        }
+
+        if (request.getPrice() != null) {
+            playlist.setPrice(request.getPrice());
+        }
+
+        playlistRepo.save(playlist);
+
+        MessageResponse response = new MessageResponse();
+        response.setMessage("Playlist updated successfully");
+
+        return response;
+    }
+    @Transactional
+    public MessageResponse deletePlaylist(Long id) {
+
+        String email = SecurityContextHolder.getContext().getAuthentication().getName();
+
+
+        TeacherEntity teacher = teacherRepo.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("Teacher not found"));
+
+
+        PlaylistEntity playlist = playlistRepo.findById(id)
+                .orElseThrow(() -> new RuntimeException("Playlist not found"));
+
+        if (!playlist.getTeacher().getId().equals(teacher.getId())) {
+            throw new CustomException("Access denied", "FORBIDDEN", 403);
+        }
+
+        List<StudentEntity> students = studentRepo.findAll();
+
+        for (StudentEntity student : students) {
+            if (student.getPurchasedPlaylists() != null) {
+                student.getPurchasedPlaylists().removeIf(p -> p.getId().equals(id));
+            }
+        }
+
+        studentRepo.saveAll(students);
+
+
+        playlistRepo.delete(playlist);
+
+        MessageResponse response = new MessageResponse();
+        response.setMessage("Playlist deleted successfully");
+
+        return response;
+    }
+
+
 }

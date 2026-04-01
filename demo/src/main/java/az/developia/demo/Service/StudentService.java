@@ -2,6 +2,7 @@ package az.developia.demo.Service;
 
 import az.developia.demo.Entity.*;
 import az.developia.demo.Exception.CustomException;
+import az.developia.demo.Mapper.PlaylistMapper;
 import az.developia.demo.Mapper.StudentMapper;
 import az.developia.demo.Repo.*;
 import az.developia.demo.Request.AddVerifyRequest;
@@ -9,6 +10,7 @@ import az.developia.demo.Request.StudentRequest;
 import az.developia.demo.Request.StudentUpdateRequest;
 import az.developia.demo.Request.TeacherUpdateRequest;
 import az.developia.demo.Response.MessageResponse;
+import az.developia.demo.Response.PlaylistResponse;
 import az.developia.demo.Response.StudentResponse;
 import jakarta.mail.MessagingException;
 import jakarta.transaction.Transactional;
@@ -20,6 +22,7 @@ import org.springframework.stereotype.Service;
 import java.security.SecureRandom;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.Map;
 
 @Service
@@ -35,10 +38,16 @@ public class StudentService {
     private final MailService mailService;
     private final EmailVerificationRepository emailVerificationRepository;
     private final LogService logService;
+    private final PlaylistRepo playlistRepo;
 
-    // Student Registration
     public MessageResponse register(StudentRequest request) throws MessagingException {
         userService.isUserExists(request.getEmail());
+
+
+
+
+        TeacherEntity teacher = teacherRepo.findById(request.getTeacherId())
+                .orElseThrow(() -> new RuntimeException("Teacher not found"));
 
         UserEntity user = new UserEntity();
         user.setEmail(request.getEmail());
@@ -46,10 +55,7 @@ public class StudentService {
         user.setBalance(100.0);
         user.setUserType("Student");
         user.setIsVerified(false);
-        userRepository.save(user);
 
-        TeacherEntity teacher = teacherRepo.findById(request.getTeacherId())
-                .orElseThrow(() -> new RuntimeException("Teacher not found"));
 
         StudentEntity student = new StudentEntity();
         student.setName(request.getName());
@@ -66,12 +72,13 @@ public class StudentService {
             throw new CustomException("Passwords do not match", "BAD_REQUEST", 400);
         }
 
+        userRepository.save(user);
+        roleRepository.assignStudentRoles(user.getId());
+
         studentRepo.save(student);
 
         teacher.setStudentCount((teacher.getStudentCount() == null ? 0 : teacher.getStudentCount()) + 1);
         teacherRepo.save(teacher);
-
-        roleRepository.assignStudentRoles(user.getId());
 
         String code = generateCode();
         EmailVerificationEntity entity = new EmailVerificationEntity();
@@ -91,7 +98,6 @@ public class StudentService {
         return response;
     }
 
-    // Student Profile
     public StudentResponse profile() {
         String username = SecurityContextHolder.getContext().getAuthentication().getName();
         StudentEntity student = studentRepo.findByEmail(username)
@@ -99,7 +105,6 @@ public class StudentService {
         return StudentMapper.toDTO(student);
     }
 
-    // Update Student Profile
     public MessageResponse updateStudentProfile(Map<String, Object> body, UserEntity user) {
         StudentEntity student = studentRepo.findByUser(user)
                 .orElseThrow(() -> new RuntimeException("Student not found"));
@@ -118,7 +123,6 @@ public class StudentService {
         return messageResponse;
     }
 
-    // Generate OTP Code
     private String generateCode() {
         String characters = "0123456789";
         StringBuilder codeBuilder = new StringBuilder();
@@ -151,4 +155,43 @@ public class StudentService {
 
         userRepository.deleteByEmailNative(email);
     }
+
+    @Transactional
+    public PlaylistResponse purchasePlaylist(Long playlistId) {
+
+        String email = SecurityContextHolder.getContext().getAuthentication().getName();
+
+        StudentEntity student = studentRepo.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("Student not found"));
+
+        UserEntity user = student.getUser();
+
+        PlaylistEntity playlist = playlistRepo.findById(playlistId)
+                .orElseThrow(() -> new RuntimeException("Playlist not found"));
+
+        if (student.getPurchasedPlaylists() != null &&
+                student.getPurchasedPlaylists().contains(playlist)) {
+            throw new CustomException("Playlist already purchased", "BAD_REQUEST", 400);
+        }
+
+
+        if (user.getBalance() < playlist.getPrice()) {
+            throw new CustomException("Insufficient balance", "BAD_REQUEST", 400);
+        }
+
+        user.setBalance(user.getBalance() - playlist.getPrice());
+
+        if (student.getPurchasedPlaylists() == null) {
+            student.setPurchasedPlaylists(new ArrayList<>());
+        }
+
+        student.getPurchasedPlaylists().add(playlist);
+
+        studentRepo.save(student);
+        userRepository.save(user);
+
+
+        return PlaylistMapper.toDTO(playlist);
+    }
+
 }

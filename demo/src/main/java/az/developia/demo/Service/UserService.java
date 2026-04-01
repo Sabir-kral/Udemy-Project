@@ -2,29 +2,46 @@ package az.developia.demo.Service;
 
 import az.developia.demo.Entity.EmailVerificationEntity;
 import az.developia.demo.Entity.UserEntity;
+import az.developia.demo.Entity.*;
 import az.developia.demo.Exception.CustomException;
+import az.developia.demo.Mapper.UserMapper;
 import az.developia.demo.Repo.EmailVerificationRepository;
+import az.developia.demo.Repo.RoleRepo;
 import az.developia.demo.Repo.UserRepo;
+import az.developia.demo.Mapper.PlaylistMapper;
+import az.developia.demo.Repo.*;
 import az.developia.demo.Request.AddVerifyRequest;
+import az.developia.demo.Request.LoginRequest;
+import az.developia.demo.Request.UserRequest;
+import az.developia.demo.Response.LoginResponse;
 import az.developia.demo.Request.ResendOtpRequest;
 import az.developia.demo.Response.MessageResponse;
+import az.developia.demo.Response.UserResponse;
+import az.developia.demo.Utility.JwtUtil;
+import az.developia.demo.Response.PlaylistResponse;
 import jakarta.mail.MessagingException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
+
+import java.util.List;
 import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
 public class UserService {
-
     private final UserRepo userRepository;
     private final EmailVerificationRepository emailVerificationRepository;
     private final MailService mailService;
     private final LogService logService;
+    private final StudentRepo studentRepo;
+    private final PlaylistRepo playlistRepo;
+    private final TeacherRepo teacherRepo;
 
     public void isUserExists(String email) {
         if (userRepository.findByEmail(email).isPresent()) {
@@ -96,5 +113,45 @@ public class UserService {
             codeBuilder.append(characters.charAt(secureRandom.nextInt(characters.length())));
         }
         return codeBuilder.toString();
+    }
+    public List<PlaylistResponse> all(){
+        return PlaylistMapper.toDTOList(playlistRepo.findAll());
+    }
+    public List<PlaylistResponse> getMyPlaylists() {
+
+        String email = SecurityContextHolder.getContext().getAuthentication().getName();
+
+        UserEntity user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+
+        if (user.getUserType().equalsIgnoreCase("Teacher")) {
+
+            TeacherEntity teacher = teacherRepo.findByEmail(email)
+                    .orElseThrow(() -> new RuntimeException("Teacher not found"));
+
+            return playlistRepo.findByTeacherId(teacher.getId())
+                    .stream()
+                    .map(PlaylistMapper::toDTO)
+                    .toList();
+        }
+
+
+        if (user.getUserType().equalsIgnoreCase("Student")) {
+
+            StudentEntity student = studentRepo.findByEmail(email)
+                    .orElseThrow(() -> new RuntimeException("Student not found"));
+
+            if (student.getPurchasedPlaylists() == null) {
+                return List.of();
+            }
+
+            return student.getPurchasedPlaylists()
+                    .stream()
+                    .map(PlaylistMapper::toDTO)
+                    .toList();
+        }
+
+        throw new RuntimeException("Invalid user type");
     }
 }

@@ -31,6 +31,8 @@ public class PlaylistEntity {
     @ManyToOne
     @JoinColumn(name = "category_id")
     private CategoryEntity category;
+    @Column(name = "picture_url", length = 500)
+    private String pictureUrl;
 
     private Double averageRating = 0.0;
     private Integer totalReviews = 0;
